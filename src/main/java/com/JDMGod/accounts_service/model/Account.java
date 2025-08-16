@@ -34,17 +34,11 @@ public class Account {
         this.email = email;
     }
 
-    public String getFullName() {
-        return fullName;
-    }
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
     }
 
-    public String getStatus() {
-        return status;
-    }
 
     public void setStatus(String status) {
         this.status = status;
