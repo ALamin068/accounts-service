@@ -30,11 +30,11 @@ jwt:
 # Stripe Configuration (for payment integration)
 stripe:
   secret:
-    key: sk_test_your_stripe_secret_key_here
+    key: sk_test_dummy_key_for_development
   publishable:
-    key: pk_test_your_stripe_publishable_key_here
+    key: pk_test_dummy_key_for_development
   webhook:
-    secret: whsec_your_webhook_secret_here
+    secret: whsec_dummy_secret_for_development
 
 # Management/Actuator Configuration
 management:
@@ -44,7 +44,7 @@ management:
         include: health,info,env,metrics
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
 
 # OpenAPI/Swagger Configuration
 springdoc:
@@ -59,3 +59,4 @@ logging:
   level:
     com.JDMGod.accounts_service: DEBUG
     org.springframework.security: INFO
+    org.springframework.web: INFO

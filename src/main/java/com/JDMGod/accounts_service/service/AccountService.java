@@ -1,56 +1,74 @@
 package com.JDMGod.accounts_service.service;
 
 import com.JDMGod.accounts_service.api.dto.AccountCreateRequest;
+import com.JDMGod.accounts_service.exception.DuplicateEmailException;
+import com.JDMGod.accounts_service.exception.EntityNotFoundException;
 import com.JDMGod.accounts_service.model.Account;
 import com.JDMGod.accounts_service.repo.AccountRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.crossstore.ChangeSetPersister;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class AccountService {
-    @Autowired
-    private final AccountRepository repo;
-    public AccountService(AccountRepository repo) {this.repo = repo;}
 
+    private final AccountRepository accountRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    @Transactional
-    public Account create(AccountCreateRequest req){
-      repo.findByEmail(req.email()).ifPresent(account -> {
-          throw new IllegalArgumentException("Account already exists");
-      });
-      Account account = new Account();
-      account.setEmail(req.email());
-      account.setFullName(req.fullName());
-      account.setStatus("ACTIVE");
-      return repo.save(account);
-
+    public AccountService(AccountRepository accountRepository, PasswordEncoder passwordEncoder) {
+        this.accountRepository = accountRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
-    @Transactional(readOnly = true)
-    public Account get(Long id){
-        return repo.findById(id).orElseThrow(() -> new IllegalArgumentException("Account not found"));
+    public List<Account> getAllAccounts() {
+        return accountRepository.findAll();
     }
 
-    @Transactional(readOnly = true)
-    public Account getByEmail(String email) {
-        return repo.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("Account not found"));
+    public Optional<Account> getAccountById(Long id) {
+        return accountRepository.findById(id);
     }
 
-    @Transactional(readOnly = true)
-    public List<Account> list() {
-        return repo.findAll();
+    public Optional<Account> getAccountByEmail(String email) {
+        return accountRepository.findByEmail(email);
     }
 
+    public Account createAccount(AccountCreateRequest request) {
+        if (accountRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new DuplicateEmailException("Email already exists: " + request.getEmail());
+        }
 
-    //Delete by ID
-    @Transactional
-    public void delete(Long id){
-        repo.deleteById(id);
+        Account account = new Account();
+        account.setEmail(request.getEmail());
+        account.setFullName(request.getFullName());
+        account.setPassword(passwordEncoder.encode(request.getPassword()));
+        account.setRole(request.getRole());
+        account.setCreatedAt(LocalDateTime.now());
+        account.setUpdatedAt(LocalDateTime.now());
+
+        return accountRepository.save(account);
     }
 
+    public Account updateAccount(Long id, AccountCreateRequest request) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Account not found with id: " + id));
+
+        account.setFullName(request.getFullName());
+        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            account.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        account.setUpdatedAt(LocalDateTime.now());
+
+        return accountRepository.save(account);
+    }
+
+    public void deleteAccount(Long id) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Account not found with id: " + id));
+        account.setStatus(Account.Status.DELETED);
+        account.setUpdatedAt(LocalDateTime.now());
+        accountRepository.save(account);
+    }
 }

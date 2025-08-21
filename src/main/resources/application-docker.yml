@@ -1,11 +1,11 @@
 server:
-  port: 8081
+  port: 8080
 
 spring:
   application:
     name: E-Commerce API
   datasource:
-    url: jdbc:mysql://localhost:3306/accounts_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    url: jdbc:mysql://mysql:3306/accounts_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: app
     password: app
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -30,11 +30,11 @@ jwt:
 # Stripe Configuration (for payment integration)
 stripe:
   secret:
-    key: sk_test_your_stripe_secret_key_here
+    key: ${STRIPE_SECRET_KEY:sk_test_dummy_key_for_development}
   publishable:
-    key: pk_test_your_stripe_publishable_key_here
+    key: ${STRIPE_PUBLISHABLE_KEY:pk_test_dummy_key_for_development}
   webhook:
-    secret: whsec_your_webhook_secret_here
+    secret: ${STRIPE_WEBHOOK_SECRET:whsec_dummy_secret_for_development}
 
 # Management/Actuator Configuration
 management:
@@ -44,7 +44,7 @@ management:
         include: health,info,env,metrics
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
 
 # OpenAPI/Swagger Configuration
 springdoc:
@@ -57,5 +57,5 @@ springdoc:
 # Logging Configuration
 logging:
   level:
-    com.JDMGod.accounts_service: DEBUG
+    com.JDMGod.accounts_service: INFO
     org.springframework.security: INFO

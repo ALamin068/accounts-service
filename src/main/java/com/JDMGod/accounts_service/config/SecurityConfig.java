@@ -1,38 +1,103 @@
 package com.JDMGod.accounts_service.config;
 
-import com.JDMGod.accounts_service.repo.AccountRepository;
+import com.JDMGod.accounts_service.security.JwtAuthenticationFilter;
+import com.JDMGod.accounts_service.service.CustomUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
 
 @Configuration
-public class SecurityConfig{
-        @Bean
-        SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-            http.csrf(csrf -> csrf.disable());
-            http.authorizeHttpRequests(auth -> auth
-                    // allow Swagger/OpenAPI and health
-                    .requestMatchers(
-                            "/swagger-ui/**",
-                            "/v3/api-docs/**",
-                            "/actuator/**"
-                    ).permitAll()
-                    // allow your APIs (until we add JWT later)
-                    .requestMatchers("/api/**").permitAll()
-                    // everything else also allowed for now
-                    .anyRequest().permitAll()
-            );
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
 
-            // No login page / basic auth prompts
-            http.httpBasic(basic -> basic.disable());
-            http.formLogin(form -> form.disable());
+    private final CustomUserDetailsService userDetailsService;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-            return http.build();
-
-
-
-        }
+    public SecurityConfig(CustomUserDetailsService userDetailsService,
+                         JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.userDetailsService = userDetailsService;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:*", "https://localhost:*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    @Bean
+    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                // Public endpoints - Order matters! Most specific first
+                .requestMatchers(
+                    "/actuator/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                    "/api/auth/**",
+                    "/api/products/public/**",
+                    "/h2-console/**"
+                ).permitAll()
+                // Admin only endpoints
+                .requestMatchers("/api/admin/**", "/api/accounts/**").hasRole("ADMIN")
+                // Seller endpoints
+                .requestMatchers("/api/seller/**", "/api/products").hasAnyRole("ADMIN", "SELLER")
+                // Customer endpoints
+                .requestMatchers("/api/orders/**", "/api/payments/**").hasAnyRole("ADMIN", "CUSTOMER")
+                // All other requests need authentication
+                .anyRequest().authenticated()
+            )
+            // Disable frame options for H2 console (if using H2)
+            .headers(headers -> headers.frameOptions().sameOrigin())
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}
